@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 
 import urllib2
 import json
@@ -31,7 +32,7 @@ archive_MiszaBot_template_re = re.compile(r'\{\{User:MiszaBot/config.*?counter\s
 archive_box_template_re = re.compile(r'\{\{archive.*?\|.*?(\[\[/.*?)\}\}', re.DOTALL) #for xml
 link_re = re.compile(r'\[\[([^|]*?)(?:\|.*?)*?\]\]')
 
-xml_metadata_re = re.compile('<page pageid="(.+?)" ns="1" title="(.+?)">', re.DOTALL)
+xml_metadata_re = re.compile('<page pageid="(.+?)" ns="." title="(.+?)">', re.DOTALL)
 xml_text_re = re.compile('<rev .*? xml:space="preserve">(.*)</rev>', re.DOTALL)
 redirectP = re.compile(r'#REDIRECT \[\[(.*)\]\]')
 
@@ -62,7 +63,7 @@ def get_wikitext_xml(page):
 		
 	try:
 		opener = urllib2.build_opener()
-		infile = opener.open(query_xml % urllib2.quote(page.decode('utf-8')))
+		infile = opener.open(query_xml % urllib2.quote(page.encode('utf-8')))
 		page = infile.read().decode('utf-8')
 	except IOError, e:
 		if hasattr(e, 'reason'):
@@ -221,15 +222,42 @@ def load_id_list_from_file(file_name):
 	print '%d lines	read from file %s' % (j, file_name)
 	return d
 
+def get_article_id(page):
+    try:
+	opener = urllib2.build_opener()
+	infile = opener.open(query_xml % urllib2.quote(page.encode('utf-8')))
+	page = infile.read().decode('utf-8')
+    except IOError, e:
+        if hasattr(e, 'reason'):
+            print 'We failed to reach a server. ' + query_xml % page
+            print 'Reason: ', e.reason
+        elif hasattr(e, 'code'):
+            print 'The server couldn\'t fulfill the request: ' + query_xml % page
+            print 'Error code: ', e.code
+	if write_error_log: 
+            try:
+                error_log.write(page + '\t' + 'Error opening url ' + query_xml % page + '\n')	
+            except:
+                pass
+            error_log.flush()
+	return -1, '', ''
+	
+    found = re.search(xml_metadata_re, page)
+    if found:
+        id = found.group(1)
+        return id
+        
+    return 0
 
 if __name__ == '__main__':
 	
 	titles = load_id_list_from_file(args.article_list)  
 	for id in sorted(titles):
-		if verbose or debug: print '\nProcessing article: ' + str(id) + ' ' + str(titles[id])
+                article_id = get_article_id(titles[id])
+		if verbose or debug: print '\nProcessing article: ' + str(article_id) + ' ' + str(titles[id].encode('utf-8'))
 		if write_log: 
 			try:
-				log.write('\n\n' + str(id) + ' ' + str(titles[id]) )
+				log.write('\n\n' + str(article_id) + ' ' + str(titles[id].encode('utf-8')) )
 			except:
 				log.write('\n\n' + str(id) + ' Exception writing article title')
 		t = string.replace(titles[id],' ', '_')
@@ -237,14 +265,14 @@ if __name__ == '__main__':
 		xml = wiki_discussion_scraper("Talk:" + titles[id] ) #titles[id])
 		if xml == '': 
 			not_found.append(titles[id])
-			if debug: print '   Talk page not found: ' + "Talk:" + titles[id]
+			if debug: print '   Talk page not found: ' + "Talk:" + titles[id].encode('utf-8')
 			if write_log: 
 				try:
-					log.write('\n   Talk page not found: ' + "Talk:" + titles[id] )
+					log.write('\n   Talk page not found: ' + "Talk:" + titles[id].encode('utf-8') )
 				except:
 					log.write('\n   Talk page not found: ' + str(id) + ' Exception writing article title')
 		else: 		
-			f_out = codecs.open(args.output_folder + 'article_talk_' + str(id) + '.wikitext', 'w', 'utf-8')		
+			f_out = codecs.open(args.output_folder + 'article_talk_' + str(article_id) + '.wikitext', 'w', 'utf-8')		
 			f_out.write(xml)
 			f_out.close()
 		log.flush()	
